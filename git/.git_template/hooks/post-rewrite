@@ -1,0 +1,3 @@
+#!/bin/bash
+# regenerate tags after rebases or other history-rewrites
+~/.git_template/hooks/ctags

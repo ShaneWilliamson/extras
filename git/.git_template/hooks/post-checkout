@@ -1,0 +1,3 @@
+#!/bin/bash
+# rergenerate tags after any checkout
+~/.git_template/hooks/ctags
