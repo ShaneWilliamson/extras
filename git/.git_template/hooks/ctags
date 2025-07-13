@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e
 
-# prefer Homebrew/universal-ctags if possible
+# Prefer Homebrew/universal-ctags if possible
 PATH="/usr/local/bin:$PATH"
 
-# usage helper
+# ---------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------
 show_help() {
   echo "Usage: $(basename "$0") [--deps]"
   echo
@@ -12,72 +14,69 @@ show_help() {
   exit 0
 }
 
-# parse args
+# ---------------------------------------------------------------------
+# argument parsing
+# ---------------------------------------------------------------------
 RUN_DEPS=false
 case "$1" in
-	-h | --help) show-help ;;
-	--deps | deps) RUN_DEPS=true ;;
-	"") ;;
-	*)
-		echo "Unknown option: $1" >&2
-		show_help
-		;;
+-h | --help) show_help ;;
+--deps | deps) RUN_DEPS=true ;;
+"") ;;
+*)
+  echo "Unknown option: $1" >&2
+  show_help
+  ;;
 esac
 
-#clean up tempm files on exit
+# ---------------------------------------------------------------------
+# clean-up on exit
+# ---------------------------------------------------------------------
 trap 'rm -f "$$.tags_main" "$$.tags_deps"' EXIT
 
-# -----------------------------------------------------------------------------
-# 1) main tags (the code), skip deps, .git, and any existing tags file
-# -----------------------------------------------------------------------------
-echo "indexing main tags..."
+# ---------------------------------------------------------------------
+# 1) project tags
+# ---------------------------------------------------------------------
+echo "indexing main tags…"
 ctags -R \
-	--tags-relative \
-	--languages=JavaScript,TypeScript \
-	--exclude=node_modules \
-	--exclude=.git \
-	--exclude=.cursor \
-	--exclude=.next \
-	--exclude=tags* \
-	-f "$$.tags_main" \
-	. \
-	>/dev/null 2>&1
+  --tag-relative \
+  --languages=JavaScript,TypeScript \
+  --exclude=node_modules \
+  --exclude=.git \
+  --exclude=.cursor \
+  --exclude=.next \
+  --exclude=tags* \
+  -f "$$.tags_main" \
+  . >/dev/null 2>&1
 
-# -----------------------------------------------------------------------------
-# 2) deps tags: only first-level modules under node_modules/
-# -----------------------------------------------------------------------------
-
-# build a list of real dirs or symlinks-to-dirs in node_modules/,
-# excluding the pnpm store and .bin
+# ---------------------------------------------------------------------
+# 2) dependency tags (first-level node_modules)
+# ---------------------------------------------------------------------
 if $RUN_DEPS; then
-	echo "indexing dependency tags..."
-	set --
-	for entry in node_modules/*; do
-		if [ -d "$entry" ] &&
-			[ "$entry" != "node_modules/.pnpm" ] &&
-			[ "$entry" != "node_modules/.bin" ]; then
-		set -- "$@" "$entry"
+  echo "indexing dependency tags…"
+  set --
+
+  for entry in node_modules/*; do
+    if [ -d "$entry" ] &&
+      [ "$entry" != "node_modules/.pnpm" ] &&
+      [ "$entry" != "node_modules/.bin" ]; then
+      set -- "$@" "$entry"
+    fi
+  done
+
+  ctags -R \
+    --tag-relative \
+    --languages=JavaScript,TypeScript \
+    --exclude=node_modules \
+    --exclude=.git \
+    --exclude=tags* \
+    -f "$$.tags_deps" \
+    "$@" >/dev/null 2>&1
 fi
-done
 
-# now index exactly those directories, and prune any nested node_modules
-ctags -R \
-	--tag-relative \
-	--languages=JavaScript,TypeScript \
-	--exclude=node_modules \
-	--exclude=.git \
-	--exclude=tags* \
-	-f "$$.tags_deps" \
-	"$@" \
-	>/dev/null 2>&1
-fi
-
-# -----------------------------------------------------------------------------
-# 3) atomically move into place
-# -----------------------------------------------------------------------------
-
+# ---------------------------------------------------------------------
+# 3) move into place atomically
+# ---------------------------------------------------------------------
 mv "$$.tags_main" tags
 if $RUN_DEPS; then
-	mv "$$.tags_deps" tags_deps
+  mv "$$.tags_deps" tags_deps
 fi
-echo "indexing of tags is complete. :D"
